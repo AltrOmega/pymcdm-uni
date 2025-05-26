@@ -42,9 +42,25 @@ def main():
 
 
     ##### 4.3 Wykorzystanie metod decyzyjnych
+
+    # Ekstrakcja punktów refrencyjnych do spotis
+    # shape[1] daje size of a given dimension w tym wypadku są to nasze kolumny,
+    # czyli poszczególne kryteria
+    bounds = []
+    for i in range(decision_matrix.shape[1]):
+        if types[i] == 1:# no i oczywiście patrzymy po typach kryteriów: 1 to max, -1 to min
+            bound_min = np.min(decision_matrix[:, i])
+            bound_max = np.max(decision_matrix[:, i])
+        else:
+            bound_min = np.min(decision_matrix[:, i])
+            bound_max = np.max(decision_matrix[:, i])
+        bounds.append([bound_min, bound_max])
+
+    bounds = np.array(bounds)
+
     # 1. Zaimportuj z biblioteki pymcdm odpowiednie metody 
     topsis = methods.TOPSIS()
-    spotis = methods.SPOTIS()
+    spotis = methods.SPOTIS(bounds)
     vikor = methods.VIKOR()#(dodatkowo)
 
     # 2. Dokonaj normalizacji danych 
@@ -55,19 +71,7 @@ def main():
     topsis_results = topsis(decision_matrix, weights_expert, types)
 
     # spotis (also known as super pootis: https://youtu.be/tIth5VYrJqs?si=49wcVTdNCHz-pOcb&t=12)
-
-    # Ekstrakcja punktów refrencyjnych do spotis
-    bounds = np.zeros((2, decision_matrix.shape[1])) # shape[1] daje size of a given dimension
-    for i in range(decision_matrix.shape[1]):#         w tym wypadku są to nasze kolumny, czyli
-        if types[i] == 1:#                             poszczególne kryteria
-            bounds[0, i] = np.min(decision_matrix[:, i])
-            bounds[1, i] = np.max(decision_matrix[:, i])
-        else:# no i oczywiście patrzymy po typach kryteriów: 1 to max, -1 to min
-            bounds[0, i] = np.max(decision_matrix[:, i])
-            bounds[1, i] = np.min(decision_matrix[:, i])
-
-    # pootispenserhere
-    spotis_results = spotis(decision_matrix, weights_expert, types, bounds)
+    spotis_results = spotis(decision_matrix, weights_expert, types)
 
    # Viktor w ramach "ewentualnie inne dostępne w pymcdm"
     vikor_results = vikor(decision_matrix, weights_expert, types)
@@ -77,7 +81,7 @@ def main():
     # alredy done: topsis_results, spotis_results + viktor_results
 
     # 2. Porównaj otrzymane rankingi
-    alternatives = list(map(lambda i: f'Samochód {i+1}', enumerate(decision_matrix.shape[0])))# B)
+    alternatives = list(map(lambda i: f'Samochód {i+1}', range(decision_matrix.shape[0])))# B)
     #alternatives = ['Samochód 1', 'Samochód 2', 'Samochód 3', 'Samochód 4', 'Samochód 5']
 
     # Rankingi
