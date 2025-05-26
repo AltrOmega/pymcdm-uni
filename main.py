@@ -1,6 +1,8 @@
 import numpy as np
 from pymcdm import methods, normalizations, weights
 import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.stats import spearmanr
 
 def main():
     ##### 4.1 Instalacja biblioteki pymcdm
@@ -13,7 +15,7 @@ def main():
     # Instalujemy wymagane biblioteki:
     # pip install -r requirements.txt
 
-    # Alternatywnie zwykłe: "pip install pymcd" powinno działać
+    # Alternatywnie zwykłe: "pip install pymcdm" powinno działać
     # Lepiej jest i tak zrobić python envoirment aby nie mieć potem problemów z
     # globalnie zainstalowanymi bibliotekami.
 
@@ -34,6 +36,11 @@ def main():
 
     # 2. Określ wektor wag dla poszczególnych kryteriów (jak silne znacznie ma konkretny numer)
     weights_expert = np.array([0.25, 0.15, 0.25, 0.15, 0.20])
+    
+    # Alternatywnie w ramach "wyznaczenie wag metodami pymcdm"
+    # można użyć metody entropy do wyznaczenia wag (ale wole dać własne numerki)
+    weights_entropy = weights.entropy_weights(decision_matrix)
+    print("Wagi wyznaczone metodą entropy:", weights_entropy)
 
     # 3. Ustal, które kryteria mają być maksymalizowane, a które minimalizowane
     # Typy kryteriów (min, max, min, max, max)
@@ -48,12 +55,8 @@ def main():
     # czyli poszczególne kryteria
     bounds = []
     for i in range(decision_matrix.shape[1]):
-        if types[i] == 1:# no i oczywiście patrzymy po typach kryteriów: 1 to max, -1 to min
-            bound_min = np.min(decision_matrix[:, i])
-            bound_max = np.max(decision_matrix[:, i])
-        else:
-            bound_min = np.min(decision_matrix[:, i])
-            bound_max = np.max(decision_matrix[:, i])
+        bound_min = np.min(decision_matrix[:, i])
+        bound_max = np.max(decision_matrix[:, i])
         bounds.append([bound_min, bound_max])
 
     bounds = np.array(bounds)
@@ -68,13 +71,19 @@ def main():
 
     # 3. Uruchom wybrane metody, oraz 4. Odbierz wyniki
     # topsis (best sister)
-    topsis_results = topsis(decision_matrix, weights_expert, types)
+    topsis_results = topsis(normalized_matrix, weights_expert, types)
 
     # spotis (also known as super pootis: https://youtu.be/tIth5VYrJqs?si=49wcVTdNCHz-pOcb&t=12)
     spotis_results = spotis(decision_matrix, weights_expert, types)
+    # i tutaj mam troche problem, bo nie jestem pewien czy powinienem dać normalized matrix.
+    # ale jak patrze na https://pymcdm.readthedocs.io/en/master/modules/american_school.html#spotis
+    # oraz https://pymcdm.readthedocs.io/en/master/modules/american_school.html#topsis
+    # to widze że w topsis bezpośredio mówią żeby normalizować minmaxem w spotis nie,
+    # więc zakładam że chcą żeby dać bez normalizacji
+    # ale z kolei w Viktorze też nie ma tego...
 
    # Viktor w ramach "ewentualnie inne dostępne w pymcdm"
-    vikor_results = vikor(decision_matrix, weights_expert, types)
+    vikor_results = vikor(normalized_matrix, weights_expert, types)
 
     # 4.4 Porównanie wyników i wnioski
     # 1. Uruchom co najmniej dwie różne metody decyzyjne 
@@ -89,19 +98,67 @@ def main():
     spotis_ranking = np.argsort(spotis_results) # rosnąco
     vikor_ranking = np.argsort(vikor_results) # rosnąco
 
+    # tak apropo całej sekcji poniżej tutaj
+    # wszystkie list comperhension typu [list(topsis_ranking).index(i) + 1 for i in range(len(alternatives))]
+    # są poto żeby uniknąć liczenia rankingów od 0
+    # irl nie ma miejsca 0 wego, jest 1 sze miejsce
+
+    topsis_ranks = [list(topsis_ranking).index(i) + 1 for i in range(len(alternatives))]
+    spotis_ranks = [list(spotis_ranking).index(i) + 1 for i in range(len(alternatives))]
+    vikor_ranks = [list(vikor_ranking).index(i) + 1 for i in range(len(alternatives))]
+
     # Wyniki Dwarf Fortress: Wyniki Fortecy Kranoludów
     results_df = pd.DataFrame({
         'Alternatywa': alternatives,
         'TOPSIS wynik': topsis_results,
-        'TOPSIS ranking': [list(topsis_ranking).index(i) + 1 for i in range(len(alternatives))],
+        'TOPSIS ranking': topsis_ranking,
         'SPOTIS wynik': spotis_results,
-        'SPOTIS ranking': [list(spotis_ranking).index(i) + 1 for i in range(len(alternatives))],
+        'SPOTIS ranking': spotis_ranking,
         'VIKOR wynik': vikor_results,
-        'VIKOR ranking': [list(vikor_ranking).index(i) + 1 for i in range(len(alternatives))]
+        'VIKOR ranking': vikor_ranking
     })
 
     print("Wyniki:")
     print(results_df)
+
+  
+    # Obliczenie korelacji Spearmana między rankingami (mam flashbacki ze statystyki tutaj)
+    corr_topsis_spotis, _ = spearmanr(topsis_ranks, spotis_ranks)
+    corr_topsis_vikor, _ = spearmanr(topsis_ranks, vikor_ranks)
+    corr_spotis_vikor, _ = spearmanr(spotis_ranks, vikor_ranks)
+    
+    print("\nKorelacja Spearmana między rankingami:")
+    print(f"TOPSIS vs SPOTIS: {corr_topsis_spotis:.4f}")
+    print(f"TOPSIS vs VIKOR: {corr_topsis_vikor:.4f}")
+    print(f"SPOTIS vs VIKOR: {corr_spotis_vikor:.4f}")
+    
+    # Interpretacja wyników
+    print("\nInterpretacja wyników:")
+    best_topsis = alternatives[topsis_ranking[0]]
+    best_spotis = alternatives[spotis_ranking[0]]
+    best_vikor = alternatives[vikor_ranking[0]]
+    
+    print(f"Najlepsza alternatywa według TOPSIS: {best_topsis}")
+    print(f"Najlepsza alternatywa według SPOTIS: {best_spotis}")
+    print(f"Najlepsza alternatywa według VIKOR: {best_vikor}")
+    
+    # Wizualizacja rankingów
+    plt.figure(figsize=(12, 6))
+    bar_width = 0.25
+    index = np.arange(len(alternatives))
+    
+    plt.bar(index, topsis_ranks, bar_width, label='TOPSIS')
+    plt.bar(index + bar_width, spotis_ranks, bar_width, label='SPOTIS')
+    plt.bar(index + 2*bar_width, vikor_ranks, bar_width, label='VIKOR')
+    
+    plt.xlabel('Alternatywy')
+    plt.ylabel('Pozycja w rankingu')
+    plt.title('Porównanie rankingów metod MCDM')
+    plt.xticks(index + bar_width, alternatives)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig('ranking_comparison.png')
+    plt.show() # I still didnt fix wsl configs...
 
 
 if __name__ == '__main__':
